@@ -6,9 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
-// import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;import java.util.concurrent.ConcurrentHashMap;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.logging.FileHandler;
@@ -646,7 +644,6 @@ public class peerProcess {
     private static File log_file;
     static MyLogger logger;
     private static String torFileName;
-    private static String torFileFormat;
 
     private static class MainBackgroundThread extends Thread {
         private AdjacentConnectionNode peer;
@@ -668,48 +665,36 @@ public class peerProcess {
             synchronized (this) {
 
                 try {
-
-                    DataInputStream dataInputStream = new DataInputStream(peer.getConnection().getInputStream());
+                    ObjectInputStream inputStream = new ObjectInputStream(peer.getConnection().getInputStream());
                     System.out.println("Sending bit field msg ... ");
+
+                    /*DataInputStream dataInputStream = new DataInputStream(peer.getConnection().getInputStream());
+                    System.out.println("Sending bit field msg ... ");*/
                     peer.sendBitFieldMsg();
                     int ccc = 0;
                     BufferedWriter writer = new BufferedWriter(new FileWriter(log_file.getAbsolutePath(), true));
 
                     while (peersWithCompleteFiles < peerMap.size()) {
-                        // System.out.println(ccc + " ---- dekhte hain loop " + " ccompleted files " +
-                        // peersWithCompleteFiles + "/" + peerMap.size());
+                        /*int msgLength = dataInputStream.readInt();*/
+                        int msgLength = inputStream.readInt();
 
-                        int msgLength = dataInputStream.readInt();
+                        byte[] msg = new byte[msgLength - 1];
+                        byte[] inputMsg = new byte[msgLength];
 
-                        byte[] msg = null, inputMsg = null;
-                        boolean vvv = true;
-                        if (vvv == true) {
-                            msg = new byte[msgLength - 1];
-                            inputMsg = new byte[msgLength];
-                            // System.out.println("Comes here");
-                        }
                         double startTime = (System.nanoTime() / 100000000.0);
-                        dataInputStream.readFully(inputMsg);
+                        /*dataInputStream.readFully(inputMsg);*/
+                        inputStream.readFully(inputMsg);
                         double endTime = (System.nanoTime() / 100000000.0);
 
                         char msgType = (char) (inputMsg[0]);
-                        {
-                            int index = 0;
-                            for (int i = 1; i < msgLength; i++) {
-                                msg[index++] = inputMsg[i];
-                            }
+                        int index = 0;
+                        for (int i = 1; i < msgLength; i++) {
+                            msg[index++] = inputMsg[i];
                         }
 
                         writer.flush();
 
-
-                        // ConnectedPeerNode connectedPeerObject;
-                        // int randomChunkIndex;
-                        // System.out.println("This is my message type " + msgType + " entering
-                        // switch..");
-
                         if (msgType == globalMessageTypes.getBitFieldChar()) {
-                            // System.out.println("BITFIELD aya hain + " + currentNodeId + " iske thread
                             // waale functio mein hun");
                             int inde = 0;
 
@@ -853,7 +838,6 @@ public class peerProcess {
                                 //
                             }
                         } else if (msgType == globalMessageTypes.getHaveChar()) {
-                            // System.out.println("Bhaiya mein server hun mere paas HAVE aya hain");
                             int haveChunkIndex = ByteBuffer.wrap(msg).getInt();
                             ConnectedPeerNode connectedPeerObject = peerMap.get(peer.getPeerId());
 
@@ -871,15 +855,9 @@ public class peerProcess {
                                 boolean checkMissingChunksInMe = GlobalHelperFunctions.checkMissingChunksInMe(currentNode.getBitField(),
                                         connectedPeerObject.getBitField(), connectedPeerObject.getChunksLength());
 
-                                // System.out.println("KYa mere ander chunks missing hain ? " +
-                                // checkMissingChunksInMe);
                                 if (checkMissingChunksInMe) {
-                                    // System.out.println("Mein INTERSTED hun ....");
                                     peer.sendInterestedMessage(); // mein iss waale connection say interested hun
-                                    // lenen kay liye, toh ye
-                                    // connection kee property hain.
                                 } else {
-                                    // System.out.println("Mein Intersetd nai hun....");
                                     peer.sendNotInterestedMsg() ;
                                 }
 
@@ -902,9 +880,7 @@ public class peerProcess {
 
                     writer.close();
                     Thread.sleep(5000);
-                    //System.exit(0);
                 } catch (Exception e) {
-                    //e.printStackTrace();
                 }
             }
         }
@@ -1304,7 +1280,7 @@ public class peerProcess {
             }
             try {
               
-              String finalFilePath = globalConfigReader.getRootPath() + "/peer_" + currentNodeId + "/" + (torFileName + "." + torFileFormat);
+              String finalFilePath = globalConfigReader.getRootPath() + "/" + currentNodeId + "/" + (torFileName);
               
               writeToFile(finalFilePath, newFile);
               currentNode.fileDownloaded();
@@ -1327,7 +1303,7 @@ public class peerProcess {
               System.out.println("Writing chunk to the folder.... " + recvFileChunkIndex);
               
               try {
-                  String finalFilePath = globalConfigReader.getRootPath() + "/peer_" + currentNodeId + "/" + ("chunk_" + torFileName + "_" + recvFileChunkIndex + "." + torFileFormat);
+                  String finalFilePath = globalConfigReader.getRootPath() + "/peer_" + currentNodeId + "/" + ("chunk_" + torFileName + "_" + recvFileChunkIndex);
                   writeToFile(finalFilePath, newChunkInBytes);
     
                 } catch (Exception e) {
@@ -1546,11 +1522,11 @@ public class peerProcess {
         commonConfigData = new CommonConfigData();//common cfg data
         peerMap = new LinkedHashMap<>();//peer info cfg hash map
         connectionsMap = new ConcurrentHashMap<>();
+        createDirectory(peerId);
         getTorrentDetails();
         readCommonConfig();
         commonConfigData.printConfigDetails();
         readPeerConfig();
-        createDirectory(peerId);
         logger = new MyLogger(peerId);
         connectionsMap = new ConcurrentHashMap<>();
     }
@@ -1617,7 +1593,7 @@ public class peerProcess {
     }
     // **********
     public static void writeFilePieces() throws IOException {
-        String totPath = globalConfigReader.getRootPath() + GlobalConstants.getTorrentFileName();
+        String totPath = globalConfigReader.getRootPath()+ currentNodeId + "/" + GlobalConstants.getTorrentFileName();
         BufferedInputStream file = new BufferedInputStream(new FileInputStream(totPath));
         int fileSize = commonConfigData.getFileSize();
         int pieceSize = commonConfigData.getPieceSize();
@@ -1669,9 +1645,7 @@ public class peerProcess {
     }
 
     public static void getTorrentDetails() {
-        String[] splitted = GlobalConstants.getTorrentFileName().split("\\.");
-        torFileName = splitted[0];
-        // torFileFormat = splitted[1];
+        torFileName = GlobalConstants.getTorrentFileName();
     }
     public static void main(String[] args) throws IOException {
 
