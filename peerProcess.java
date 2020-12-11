@@ -155,8 +155,8 @@ class MyLogger {
   FileHandler fileHandler;
   MyLogger(String peerId) throws IOException {
       logger = Logger.getLogger(peerProcess.class.getName());
-      //fileHandler = new FileHandler(".//peer_"+ peerId +"//logs_"+ peerId+".log");
-      fileHandler = new FileHandler(".//logs_"+ peerId +".log");
+      fileHandler = new FileHandler(".//"+ peerId +"//logs_"+ peerId+".log");
+    //   fileHandler = new FileHandler(".//logs_"+ peerId +".log");
       fileHandler.setFormatter(new MyFormatter());
       logger.addHandler(fileHandler);
   }
@@ -1591,44 +1591,30 @@ public class peerProcess {
 
     public static void createDirectory(String peerId) throws IOException {
 
-        Path path = Paths.get(".//peer_"+peerId);
+        Path path = Paths.get(".//"+peerId);
         //Deleting folder if it exists
         if(Files.exists(path)){
-            deleteDirectory(path);
+            clearDirectory(path);
+            currentNodeDir = path.toFile();
+        }else{
+            currentNodeDir = Files.createDirectory(path).toFile();
         }
-        currentNodeDir = Files.createDirectory(path).toFile();
         //Files.createDirectory(path);
     }
 
-    private static void deleteDirectory(Path path) throws IOException {
-        //Get all files and directories inside the directory.
-        Stream<Path> folders = Files.list(path);
-
-        //Deleting every folder recursively.
-        folders.filter(file -> Files.isDirectory(file)).forEach(directory -> {
-            try {
-                deleteDirectory(directory);
-            } catch (IOException e) {
-                logger.logError(e.getMessage());
-            }
-        });
-        folders.close();
-
+    //deletes all files other than torrent file
+    private static void clearDirectory(Path path) throws IOException {
         //Deleting every file.
+        String fileName = GlobalConstants.getTorrentFileName();
         Stream<Path> files = Files.list(path);
-        files.filter(file -> Files.isRegularFile(file)).forEach(file -> {
-            try {
+        for(Object obj : files.toArray()){
+            Path file = (Path) obj;
+            if(!file.getFileName().toString().equals(fileName)){
                 Files.deleteIfExists(file);
-            } catch (IOException e) {
-                e.printStackTrace();
             }
-        });
+        }
         files.close();
-
-        //Deleting the current folder
-        Files.deleteIfExists(path);
     }
-
     // **********
     public static void writeFilePieces() throws IOException {
         String totPath = globalConfigReader.getRootPath() + GlobalConstants.getTorrentFileName();
