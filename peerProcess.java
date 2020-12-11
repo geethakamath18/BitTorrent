@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
+// import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.logging.FileHandler;
@@ -183,14 +185,14 @@ class GlobalMessageTypes {
 
     public GlobalMessageTypes() {
         map = new HashMap<>();
+        map.put("CHOKE" , '0');
         map.put("UNCHOKE" , '1');
-        map.put("BITFIELD" , '5');
         map.put("INTERESTED" , '2');
         map.put("NOT_INTERESTED" , '3');
+        map.put("HAVE" , '4');
+        map.put("BITFIELD" , '5');
         map.put("REQUEST" , '6');
         map.put("PIECE" , '7');
-        map.put("HAVE" , '4');
-        map.put("CHOKE" , '0');
     }
 
     public char getChokeChar() {
@@ -205,35 +207,29 @@ class GlobalMessageTypes {
 
     public char getInterestedChar() {
         char ch = map.get("INTERESTED");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
 
     public char getNotInterestedChar() {
         char ch = map.get("NOT_INTERESTED");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
 
     public char getBitFieldChar() {
         char ch = map.get("BITFIELD");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
     public char getRequestChar() {
         char ch = map.get("REQUEST");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
     public char getPeiceChar() {
         char ch = map.get("PIECE");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
 
     public char getHaveChar() {
         char ch = map.get("HAVE");
-        System.out.println(ch + " -----------------------------------------------------");
         return ch;
     }
 }
@@ -310,10 +306,10 @@ class GlobalHelperFunctions {
         return copy;
     }
 
-    public static boolean checkMissingChunksInMe(int[] thisPeerBitfield, int[] connectedPeerBitfield, int len) {
+    public static boolean checkMissingChunksInMe(int[] currentPeerBitfield, int[] connectedPeerBitfield, int len) {
         int i;
         for (i = 0; i < len; i++) {
-            if (thisPeerBitfield[i] == 0 && connectedPeerBitfield[i] == 1) {
+            if (currentPeerBitfield[i] == 0 && connectedPeerBitfield[i] == 1) {
                 return true;
             }
         }
@@ -511,16 +507,6 @@ class ConnectedPeerNode {
         this.numberOfPieces = 0;
     }
 
-    public int initializePeerObject(String rawPeerData) {
-        String[] words = rawPeerData.split(" ");
-        this.peerId = Integer.parseInt(words[0]);
-        this.nameOfHost = words[1];
-        this.portNumber = Integer.parseInt(words[2]);
-        this.hasFile = Integer.parseInt(words[3]);
-
-        return this.peerId;
-    }
-
     public boolean hasFile() {
 
         if (this.hasFile == 1) {
@@ -573,12 +559,12 @@ class ConnectedPeerNode {
         this.pieceMarker = pieceMarker;
     }
 
-    public void updateChunkMarker(int[] chunkMarker) {
+    public void updatePieceMarker(int[] pieceMarker) {
         System.out.println("updating bit field for " + this.peerId);
-        this.pieceMarker = chunkMarker;
+        this.pieceMarker = pieceMarker;
     }
 
-    public int getStoredChunks() {
+    public int getStoredPiece() {
         int count = 0;
         for (int i = 0; i < pieceMarker.length; i++) {
             if (pieceMarker[i] == 1)
@@ -588,7 +574,7 @@ class ConnectedPeerNode {
         return count;
     }
 
-    public int getChunksLength() {
+    public int getPiecesLength() {
         return this.pieceMarker.length;
     }
 
@@ -668,21 +654,16 @@ public class peerProcess {
                     ObjectInputStream inputStream = new ObjectInputStream(peer.getConnection().getInputStream());
                     System.out.println("Sending bit field msg ... ");
 
-                    /*DataInputStream dataInputStream = new DataInputStream(peer.getConnection().getInputStream());
-                    System.out.println("Sending bit field msg ... ");*/
                     peer.sendBitFieldMsg();
-                    int ccc = 0;
                     BufferedWriter writer = new BufferedWriter(new FileWriter(log_file.getAbsolutePath(), true));
 
                     while (peersWithCompleteFiles < peerMap.size()) {
-                        /*int msgLength = dataInputStream.readInt();*/
                         int msgLength = inputStream.readInt();
 
                         byte[] msg = new byte[msgLength - 1];
                         byte[] inputMsg = new byte[msgLength];
 
                         double startTime = (System.nanoTime() / 100000000.0);
-                        /*dataInputStream.readFully(inputMsg);*/
                         inputStream.readFully(inputMsg);
                         double endTime = (System.nanoTime() / 100000000.0);
 
@@ -695,33 +676,27 @@ public class peerProcess {
                         writer.flush();
 
                         if (msgType == globalMessageTypes.getBitFieldChar()) {
-                            // waale functio mein hun");
-                            int inde = 0;
-
+                            index = 0;
                             int[] bitfield = new int[msg.length / 4];
                             for (int i = 0; i < msg.length; i += 4) { //
                                 byte[] tempByteArray = GlobalHelperFunctions.copyByteArray(msg, i, i + 4);
-                                bitfield[inde++] = ByteBuffer.wrap(tempByteArray).getInt();
+                                bitfield[index++] = ByteBuffer.wrap(tempByteArray).getInt();
                             }
 
-                            // update the bitfield/chunks
-                            ConnectedPeerNode connectedPeerObject = peerMap.get(peer.getPeerId());
-                            connectedPeerObject.updateChunkMarker(bitfield);
-                            int currentPeerChunks = connectedPeerObject.getStoredChunks();
+                            // update the bitfield/piece
+                            ConnectedPeerNode connectedPeerNode = peerMap.get(peer.getPeerId());
+                            connectedPeerNode.updatePieceMarker(bitfield);
+                            int currentPeerChunks = connectedPeerNode.getStoredPiece();
 
-                            if (currentPeerChunks == currentNode.getChunksLength()) {
-                                boolean ans = connectedPeerObject.updateHasFile(1);
+                            if (currentPeerChunks == currentNode.getPiecesLength()) {
+                                boolean ans = connectedPeerNode.updateHasFile(1);
                                 peersWithCompleteFiles++;
                             } else {
-                                boolean ans = connectedPeerObject.updateHasFile(0);
+                                connectedPeerNode.updateHasFile(0);
                             }
 
                             boolean checkMissingChunksInMe = GlobalHelperFunctions.checkMissingChunksInMe(currentNode.getBitField(),
-                                    connectedPeerObject.getBitField(), connectedPeerObject.getChunksLength());
-
-                            // System.out.println("Kya " + currentNodeId + " mere chunks missing hain ?" +
-                            // checkMissingChunksInMe + " ? ");
-                            // set interested msg.
+                                    connectedPeerNode.getBitField(), connectedPeerNode.getPiecesLength());
 
                             if (checkMissingChunksInMe) {
                                 // System.out.println("iss connection pe interested tick laga do");
@@ -759,7 +734,7 @@ public class peerProcess {
                             ConnectedPeerNode connectedPeerObject = peerMap.get(peer.getPeerId());
 
                             int randomChunkIndex = GlobalHelperFunctions.getRandomFileChunk(currentNode.getBitField(),
-                                    connectedPeerObject.getBitField(), connectedPeerObject.getChunksLength());
+                                    connectedPeerObject.getBitField(), connectedPeerObject.getPiecesLength());
 
                             if (randomChunkIndex == -1) {
                                 System.out.println("Nothing found, maybee there is no file I (RECEIVER) dont want to haves");
@@ -797,7 +772,7 @@ public class peerProcess {
                                 if (peer.isChoked() == false) {
 
                                     int randomChunkIndex = GlobalHelperFunctions.getRandomFileChunk(currentNode.getBitField(),
-                                            connectedPeerObject.getBitField(), connectedPeerObject.getChunksLength());
+                                            connectedPeerObject.getBitField(), connectedPeerObject.getPiecesLength());
 
                                     if (randomChunkIndex == -1) {
                                         // System.out.println("Nothing found, maybee there is no file I (RECEIVER) want
@@ -844,8 +819,8 @@ public class peerProcess {
                             connectedPeerObject.updateBitfield(haveChunkIndex);
 
                             // now check if
-                            int totalBits = connectedPeerObject.getStoredChunks();
-                            if (totalBits == currentNode.getChunksLength()) {
+                            int totalBits = connectedPeerObject.getStoredPiece();
+                            if (totalBits == currentNode.getPiecesLength()) {
                                 connectedPeerObject.setHaveFile(1);
                                 peersWithCompleteFiles++;
                             }
@@ -853,7 +828,7 @@ public class peerProcess {
                             {
                                 // IMPORTANT: Yaha par mein ye
                                 boolean checkMissingChunksInMe = GlobalHelperFunctions.checkMissingChunksInMe(currentNode.getBitField(),
-                                        connectedPeerObject.getBitField(), connectedPeerObject.getChunksLength());
+                                        connectedPeerObject.getBitField(), connectedPeerObject.getPiecesLength());
 
                                 if (checkMissingChunksInMe) {
                                     peer.sendInterestedMessage(); // mein iss waale connection say interested hun
@@ -870,8 +845,7 @@ public class peerProcess {
                             peer.chokeConnection();
                             System.out.println("PEER is choked");
                         } else {
-                            System.out.println("KUCH PANGA HAI");
-                            ccc++;
+                            System.out.println("Invalid message type.");
                         }
 
                     }
